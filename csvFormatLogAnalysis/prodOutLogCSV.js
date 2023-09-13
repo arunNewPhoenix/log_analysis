@@ -2,7 +2,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 
 // Read the log file
-fs.readFile('api-prod-out.log', 'utf8', (err, data) => {
+fs.readFile('../logData/api-prod-out.log', 'utf8', (err, data) => {
   if (err) {
     console.error('Error reading the log file:', err);
     return;
