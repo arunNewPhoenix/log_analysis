@@ -11,10 +11,8 @@ fs.readFile('../logData/prod-api-prod-out.log', 'utf8', (err, data) => {
   // Split the log file into individual log entries
   const logEntries = data.split(/\n\s*\n/);
 
-  // Initialize status code counts
-  const statusCounts = {};
-  const endpointCounts = {};
-  const callsPerMinute = {};
+  // Initialize an array to store combined data
+  const combinedData = [];
 
   // Process each log entry
   for (const logEntry of logEntries) {
@@ -25,6 +23,7 @@ fs.readFile('../logData/prod-api-prod-out.log', 'utf8', (err, data) => {
     const logLines = cleanedLog.split('\n');
     let timestamp = null;
     let endpoint = null;
+    let status = null;
 
     for (const line of logLines) {
       const timestampMatch = line.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/);
@@ -32,79 +31,50 @@ fs.readFile('../logData/prod-api-prod-out.log', 'utf8', (err, data) => {
         timestamp = timestampMatch[1];
       }
 
-      const endpointMatch = line.match(/"GET (\/[^? ]+)/);
+      // Use a regular expression to match only "api/" endpoints
+      const endpointMatch = line.match(/"GET (\/api\/[^? ]+)/);
       if (endpointMatch) {
         endpoint = endpointMatch[1];
       }
 
       // Extract the status code using a more flexible regex
       const statusMatch = line.match(/ (\d{3}) /);
-
       if (statusMatch) {
-        const status = parseInt(statusMatch[1], 10);
-
-        if (timestamp && endpoint) {
-          // Count API calls by endpoint
-          if (endpointCounts[endpoint]) {
-            endpointCounts[endpoint]++;
-          } else {
-            endpointCounts[endpoint] = 1;
-          }
-
-          // Count API calls per minute
-          if (callsPerMinute[timestamp]) {
-            callsPerMinute[timestamp]++;
-          } else {
-            callsPerMinute[timestamp] = 1;
-          }
-        }
-
-        // Count API calls by HTTP status code
-        if (statusCounts[status]) {
-          statusCounts[status]++;
-        } else {
-          statusCounts[status] = 1;
-        }
+        status = parseInt(statusMatch[1], 10);
       }
+    }
+
+    // Add data to the combined array
+    if (timestamp && endpoint && status) {
+      combinedData.push({ Timestamp: timestamp, Endpoint: endpoint, Status: status });
     }
   }
 
-  // Create a table for status code counts
-  const statusTable = new Table({
-    head: ['Status', 'statusCode', 'count'],
-    colWidths: [20, 15, 10],
+  // Create an object to store status code counts
+  const statusCounts = {};
+
+  // Calculate status code counts
+  combinedData.forEach((row) => {
+    const statusCode = row.Status;
+    if (statusCode in statusCounts) {
+      statusCounts[statusCode]++;
+    } else {
+      statusCounts[statusCode] = 1;
+    }
   });
 
-  // Populate the status code table
-  statusTable.push({ 'Status': 'Server Error', 'statusCode': 500, 'count': statusCounts[500] || 0 });
-  statusTable.push({ 'Status': 'Not found', 'statusCode': 404, 'count': statusCounts[404] || 0 });
-  statusTable.push({ 'Status': 'OK', 'statusCode': 200, 'count': statusCounts[200] || 0 });
-  statusTable.push({ 'Status': 'Not changed', 'statusCode': 304, 'count': statusCounts[304] || 0 });
-
-  // Create a table for API calls per minute
-  const callsTable = new Table({
-    head: ['API Calls Per Minute', 'Timestamp', 'Count'],
-    colWidths: [25, 25, 10],
+  // Create a table to display the combined data with status code counts
+  const combinedTable = new Table({
+    head: ['Timestamp', 'Endpoint', 'Status', 'Count'],
+    colWidths: [25, 40, 10, 10],
   });
 
-  // Populate the API calls per minute table
-  for (const timestamp in callsPerMinute) {
-    callsTable.push(['API Calls Per Minute', timestamp, callsPerMinute[timestamp]]);
-  }
-
-  // Create a table for API calls by endpoint
-  const endpointTable = new Table({
-    head: ['API Calls by Endpoint', 'Endpoint', 'Count'],
-    colWidths: [25, 40, 10],
+  // Populate the combined table
+  combinedData.forEach((row) => {
+    const statusCode = row.Status;
+    combinedTable.push([row.Timestamp, row.Endpoint, statusCode, statusCounts[statusCode]]);
   });
 
-  // Populate the API calls by endpoint table
-  for (const endpoint in endpointCounts) {
-    endpointTable.push(['API Calls by Endpoint', endpoint, endpointCounts[endpoint]]);
-  }
-
-  // Display the tables in the console
-  console.log(statusTable.toString());
-  console.log(callsTable.toString());
-  console.log(endpointTable.toString());
+  // Display the combined table in the console
+  console.log(combinedTable.toString());
 });
